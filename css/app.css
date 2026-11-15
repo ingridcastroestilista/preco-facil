@@ -152,3 +152,24 @@ textarea.texto { resize: vertical; }
   .tabela button { font-size: 26px; padding: 18px 0; }
   .tabela b { color: #000; }
 }
+
+/* Lucro com − / + */
+.lucro { display: grid; grid-template-columns: 1fr 64px 64px; gap: 10px; align-items: center; background: var(--cinza); border-radius: 16px; padding: 12px 14px 12px 18px; margin: 14px 0; }
+.lucro div { display: flex; flex-direction: column; }
+.lucro span { font-size: 17px; color: var(--ink-2); }
+.lucro b { font: 600 30px 'Fraunces', Georgia, serif; color: var(--marsala); }
+.lucro .btn { min-height: 56px; font-size: 28px; padding: 0; }
+
+/* Lista de serviços da cliente */
+.itens { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 12px; }
+.item { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "nome nome" "qtd total"; gap: 10px 12px; align-items: center; background: #fff; border: 2px solid var(--linha); border-radius: 16px; padding: 14px 16px; }
+.item-nome { grid-area: nome; display: flex; flex-direction: column; }
+.item-nome span { font-size: 16px; color: var(--ink-2); }
+.item-qtd { grid-area: qtd; display: flex; align-items: center; gap: 10px; }
+.item-qtd .btn { width: 56px; min-height: 56px; font-size: 28px; padding: 0; }
+.item-qtd output { min-width: 36px; text-align: center; font: 600 28px 'Inter', sans-serif; }
+.item-total { grid-area: total; display: flex; flex-direction: column; align-items: flex-end; }
+.item-total b { font-size: 24px; color: var(--marsala); }
+.item-total .link { padding: 4px 0; font-size: 17px; }
+.mais-servico { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mais-servico .btn { margin: 0; min-height: 58px; font-size: 18px; padding: 10px; }

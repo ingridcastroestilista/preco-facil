@@ -5,12 +5,20 @@ const MARSALA = '#6E2A3C';
 const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const VALIDADE_DIAS = 7;
 
+const somaItens = (o) => (o.itens || []).reduce((t, i) => t + i.valor, 0);
+const nomeItem = (i) => `${i.qtd > 1 ? `${i.qtd}× ` : ''}${i.nome}`;
+// Desconto dado sobre a soma dos serviços (só quando são vários).
+export const descontoDe = (o) => (o.itens ? Math.max(0, Math.round((somaItens(o) - o.valor) * 100) / 100) : 0);
+
 export function textoOrcamento(o, atelie) {
+  const desc = descontoDe(o);
   return [
     atelie.nome ? `*${atelie.nome}*` : null,
     `Orçamento para ${o.cliente}`,
     '',
-    `${o.descricao}: *${fmt.format(o.valor)}*`,
+    ...(o.itens
+      ? [...o.itens.map((i) => `${nomeItem(i)}: ${fmt.format(i.valor)}`), ...(desc ? [`Desconto: −${fmt.format(desc)}`] : []), `*Total: ${fmt.format(o.valor)}*`]
+      : [`${o.descricao}: *${fmt.format(o.valor)}*`]),
     `Pronto até ${dataBR(o.prazo)}`,
     o.obs ? `Observação: ${o.obs}` : null,
     '',
@@ -60,8 +68,23 @@ export async function imagemOrcamento(o, atelie) {
     blocos.push({ ls, fonte, cor, gap, alt: tam * 1.25, alinhar });
   };
   add(`Orçamento para ${o.cliente}`, `500 44px ${sans}`, '#6B6B6B', 70);
-  add(o.descricao, `600 60px ${serif}`, '#2B2522', 24);
-  add(fmt.format(o.valor), `600 120px ${serif}`, MARSALA, 30);
+  if (o.itens) {
+    // Cada serviço numa linha: nome à esquerda, valor à direita.
+    const desc = descontoDe(o);
+    const lista = [...o.itens.map((i) => [nomeItem(i), fmt.format(i.valor)]), ...(desc ? [['Desconto', `−${fmt.format(desc)}`]] : [])];
+    lista.forEach(([nome, valor], k) => {
+      ctx.font = `600 42px ${sans}`;
+      const larguraValor = ctx.measureText(valor).width;
+      ctx.font = `400 42px ${sans}`;
+      const ls = linhas(ctx, nome, W - 2 * M - larguraValor - 40);
+      blocos.push({ ls, fonte: `400 42px ${sans}`, cor: '#2B2522', gap: k ? 18 : 36, alt: 42 * 1.3, valor });
+    });
+    add('Total', `600 36px ${sans}`, '#6B6B6B', 46);
+  } else {
+    add(o.descricao, `600 60px ${serif}`, '#2B2522', 24);
+  }
+  const iValor = blocos.length;
+  add(fmt.format(o.valor), `600 120px ${serif}`, MARSALA, o.itens ? 6 : 30);
   add(`Pronto até ${dataBR(o.prazo)}`, `600 44px ${sans}`, '#2B2522', 70);
   if (o.obs) add(o.obs, `400 40px ${sans}`, '#2B2522', 30);
   add(`Orçamento válido até ${dataBR(somaDias(o.criadoEm, VALIDADE_DIAS))}`, `400 34px ${sans}`, '#6B6B6B', 60);
@@ -91,8 +114,19 @@ export async function imagemOrcamento(o, atelie) {
     y += b.gap;
     ctx.font = b.fonte;
     ctx.fillStyle = b.cor;
+    const y0 = y;
     for (const l of b.ls) { y += b.alt; ctx.fillText(l, M, y - b.alt * 0.2); }
-    if (i === 2) { // linha depois do valor
+    if (b.valor) { // valor do serviço, alinhado à direita na primeira linha
+      ctx.font = `600 42px ${'"Inter", system-ui, sans-serif'}`;
+      ctx.textAlign = 'right';
+      ctx.fillText(b.valor, W - M, y0 + b.alt * 0.8);
+      ctx.textAlign = 'left';
+    }
+    if (o.itens && i === iValor - 2) { // linha antes do total
+      ctx.fillStyle = '#E8DED9';
+      ctx.fillRect(M, y + 20, W - 2 * M, 3);
+    }
+    if (i === iValor) { // linha depois do valor
       ctx.fillStyle = '#E8DED9';
       ctx.fillRect(M, y + 24, W - 2 * M, 3);
     }

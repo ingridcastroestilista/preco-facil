@@ -1,4 +1,4 @@
-import { valorDaHora, preco, tempoTxt, hojeISO, somaDias, dataBR, diaMes } from './calc.js';
+import { valorDaHora, preco, totalLista, lucroValido, LUCRO, tempoTxt, hojeISO, somaDias, dataBR, diaMes } from './calc.js';
 import { imagemOrcamento, textoOrcamento, textoTabela } from './orcamento.js';
 
 // ---------- Dados no aparelho ----------
@@ -14,18 +14,21 @@ const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(3
 
 function inicial() {
   return {
-    hora: { ganhar: 0, gastos: 0, dias: 5, horas: 6, itens: {} },
+    hora: { ganhar: 0, gastos: 0, dias: 5, horas: 6, itens: {}, lucro: LUCRO },
     configurado: false,
     servicos: SERVICOS.map(([nome, min]) => ({ id: uid(), nome, min })),
     atelie: { nome: '', telefone: '' },
     atual: null, // cálculo em andamento
     orc: null,   // orçamento em andamento
+    lista: null, // vários serviços para a mesma cliente: { itens, lucro }
+    adicionando: false, // o cálculo em andamento vai para a lista
     orcamentos: [],
   };
 }
 
 let S;
 try { S = { ...inicial(), ...JSON.parse(localStorage.getItem(CHAVE)) }; } catch { S = inicial(); }
+S.hora.lucro ??= LUCRO; // quem configurou antes do lucro ajustável
 const salvar = () => { try { localStorage.setItem(CHAVE, JSON.stringify(S)); } catch { /* sem espaço */ } };
 if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 
@@ -69,6 +72,18 @@ const continuar = (acao = 'continuar', texto = 'Continuar') => `<button class="b
 const opcoes = (nome, lista, atual) => `<div class="opcoes" role="radiogroup">${lista.map(([v, t]) =>
   `<button class="opcao" role="radio" aria-checked="${String(v) === String(atual)}" data-acao="${nome}" data-v="${v}">${t}</button>`).join('')}</div>`;
 
+const pctTxt = (v) => `${Math.round(v * 100)}%`;
+
+// Lucro do cálculo: − / + de 5 em 5.
+const lucroCtl = (v) => `
+  <div class="lucro">
+    <div><span>Seu lucro</span><b>${pctTxt(v)}</b></div>
+    <button class="btn redondo" data-acao="lucroMenos" aria-label="Menos lucro">−</button>
+    <button class="btn redondo" data-acao="lucroMais" aria-label="Mais lucro">+</button>
+  </div>
+  ${v < LUCRO ? '<p class="alerta">Abaixo de 20% sobra pouco para a sua costura crescer.</p>' : ''}`;
+const mudaLucro = (v, d) => lucroValido(Math.round((v + d) * 100) / 100);
+
 function aviso(msg) {
   const el = document.getElementById('aviso');
   el.textContent = msg;
@@ -88,12 +103,13 @@ T.inicio = {
       return `${topo()}
         <div class="boas-vindas">
           <img src="icons/icon.svg" alt="" width="88" height="88">
-          ${pergunta('Vamos descobrir quanto cobrar pelo seu trabalho', 'Primeiro, 3 perguntas rápidas sobre a sua costura. Você só faz isso uma vez.')}
+          ${pergunta('Vamos descobrir quanto cobrar pelo seu trabalho', 'Primeiro, 4 perguntas rápidas sobre a sua costura. Você só faz isso uma vez.')}
           <a class="btn principal" href="#/hora1">Começar</a>
         </div>`;
     }
     return `${topo()}
-      <p class="valor-hora">Sua hora vale <b>${brl(valorDaHora(S.hora))}</b></p>
+      <p class="valor-hora">Sua hora vale <b>${brl(valorDaHora(S.hora))}</b> · lucro de <b>${pctTxt(S.hora.lucro)}</b></p>
+      ${S.lista?.itens.length ? `<a class="btn principal" href="#/lista">Continuar a lista da cliente (${S.lista.itens.length})</a>` : ''}
       <h1>O que você quer calcular?</h1>
       <div class="grandes">
         <a class="btn gigante" href="#/conserto"><span aria-hidden="true">✂️</span>Conserto ou ajuste</a>
@@ -111,7 +127,7 @@ T.inicio = {
 // --- Quanto vale a sua hora ---
 
 T.hora1 = {
-  render: () => `${topo('Pergunta 1 de 3', '#/inicio')}
+  render: () => `${topo('Pergunta 1 de 4', '#/inicio')}
     ${pergunta('Quanto você quer ganhar por mês com a costura?', 'É o dinheiro que fica para você, como um salário.')}
     ${campoDinheiro('ganhar', S.hora.ganhar, 'Quanto quer ganhar')}
     ${continuar()}`,
@@ -126,7 +142,7 @@ const ITENS_GASTOS = [['luz', 'Luz (parte da costura)'], ['linha', 'Linha, agulh
 let ajudaSomar = false;
 
 T.hora2 = {
-  render: () => `${topo('Pergunta 2 de 3', '#/hora1')}
+  render: () => `${topo('Pergunta 2 de 4', '#/hora1')}
     ${pergunta('Quanto você gasta por mês com a costura?', 'Pense em: luz, linha, agulha, conserto da máquina, transporte.')}
     ${campoDinheiro('gastos', S.hora.gastos, 'Quanto gasta por mês')}
     ${ajudaSomar ? `<div class="somar">${ITENS_GASTOS.map(([k, t]) => `<label class="item-soma"><span>${t}</span>
@@ -141,23 +157,51 @@ T.hora2 = {
 };
 
 T.hora3 = {
-  render: () => `${topo('Pergunta 3 de 3', '#/hora2')}
+  render: () => `${topo('Pergunta 3 de 4', '#/hora2')}
     ${pergunta('Quantos dias por semana você costura?')}
     ${opcoes('dias', [1, 2, 3, 4, 5, 6, 7].map((d) => [d, d]), S.hora.dias)}
     <h2>E quantas horas por dia?</h2>
     ${opcoes('horas', [2, 4, 6, 8, 10].map((h) => [h, `${h} horas`]), S.hora.horas)}
-    ${continuar('continuar', 'Ver quanto vale a minha hora')}`,
+    ${continuar()}`,
   dias(el) { S.hora.dias = Number(el.dataset.v); salvar(); render(); },
   horas(el) { S.hora.horas = Number(el.dataset.v); salvar(); render(); },
-  continuar() { S.configurado = true; salvar(); ir('#/horaFim'); },
+  continuar() { salvar(); ir('#/hora4'); },
+};
+
+const LUCROS = [0.2, 0.3, 0.4, 0.5];
+let outroLucro = false;
+
+T.hora4 = {
+  render: () => {
+    const l = S.hora.lucro;
+    const marcado = outroLucro || !LUCROS.includes(l) ? 'outro' : l;
+    return `${topo('Pergunta 4 de 4', '#/hora3')}
+      ${pergunta('Quanto de lucro você quer?', 'O lucro é o que sobra depois de pagar o seu ganho e os gastos. Ele ajuda a costura a crescer: comprar uma máquina, fazer um curso.')}
+      ${opcoes('lucro', [...LUCROS.map((v) => [v, pctTxt(v)]), ['outro', 'Outro']], marcado)}
+      ${marcado === 'outro' ? `<h2>Quantos por cento?</h2><label class="dinheiro"><input id="lucro" inputmode="decimal" value="${Math.round(l * 100)}" placeholder="20"><b>%</b></label>` : ''}
+      <p class="dica">20% é o mínimo recomendado. Se as clientes aceitam bem os seus preços ou a sua agenda vive cheia, você pode subir. Em cada orçamento dá para mudar também.</p>
+      ${continuar('continuar', 'Ver quanto vale a minha hora')}`;
+  },
+  lucro(el) {
+    outroLucro = el.dataset.v === 'outro';
+    if (!outroLucro) S.hora.lucro = Number(el.dataset.v);
+    salvar(); render();
+    if (outroLucro) document.getElementById('lucro')?.focus();
+  },
+  continuar() {
+    const el = document.getElementById('lucro');
+    if (el) S.hora.lucro = lucroValido(lerNum(el.value) / 100);
+    outroLucro = false;
+    S.configurado = true; salvar(); ir('#/horaFim');
+  },
 };
 
 T.horaFim = {
-  render: () => `${topo('', '#/hora3')}
+  render: () => `${topo('', '#/hora4')}
     <div class="resultado-hora">
       <p>Sua hora de trabalho vale</p>
       <strong>${brl(valorDaHora(S.hora))}</strong>
-      <p class="ajuda">Esse valor já paga o que você quer ganhar e os gastos da costura. O app usa ele em todas as contas.</p>
+      <p class="ajuda">Esse valor já paga o que você quer ganhar e os gastos da costura. O app usa ele em todas as contas, com ${pctTxt(S.hora.lucro)} de lucro no preço ideal.</p>
     </div>
     <a class="btn principal" href="#/inicio">Calcular um preço</a>`,
 };
@@ -165,8 +209,8 @@ T.horaFim = {
 // --- Conserto ---
 
 T.conserto = {
-  render: () => `${topo('Conserto ou ajuste', '#/inicio')}
-    ${pergunta('Qual serviço?')}
+  render: () => `${topo('Conserto ou ajuste', S.adicionando ? '#/lista' : '#/inicio')}
+    ${pergunta(S.adicionando ? 'Qual o outro serviço?' : 'Qual serviço?')}
     <div class="lista-servicos">
       ${S.servicos.map((s) => `<button class="btn servico" data-acao="escolher" data-id="${s.id}">${esc(s.nome)}</button>`).join('')}
       <button class="btn servico outro" data-acao="outro">Outro serviço</button>
@@ -220,18 +264,19 @@ T.material = {
       return `${topo('Peça nova', voltar)}
         ${pergunta('Quanto você gastou de tecido e material?', 'Some tecido, forro, zíper, botões, linha e o que mais for usar nesta peça.')}
         ${campoDinheiro('material', a.material, 'Valor do material')}
-        ${continuar('continuar', 'Ver o preço')}`;
+        ${continuar('continuar', S.adicionando ? 'Colocar na lista' : 'Ver o preço')}`;
     }
     return `${topo('Conserto ou ajuste', voltar)}
       ${pergunta('Vai usar algum material?', 'Por exemplo: zíper, botão, entretela, elástico.')}
       ${opcoes('tem', [['nao', 'Não'], ['sim', 'Sim']], a.temMaterial ? 'sim' : 'nao')}
       ${a.temMaterial ? `<h2>Quanto custa o material?</h2>${campoDinheiro('material', a.material, 'Valor do material')}` : ''}
-      ${continuar('continuar', 'Ver o preço')}`;
+      ${continuar('continuar', S.adicionando ? 'Colocar na lista' : 'Ver o preço')}`;
   },
   tem(el) { S.atual.temMaterial = el.dataset.v === 'sim'; if (!S.atual.temMaterial) S.atual.material = 0; salvar(); render(); if (S.atual.temMaterial) document.getElementById('material')?.focus(); },
   continuar() {
     const el = document.getElementById('material');
     S.atual.material = el ? lerNum(el.value) : 0;
+    if (S.adicionando) return paraLista();
     salvar(); ir('#/resultado');
   },
 };
@@ -239,7 +284,7 @@ T.material = {
 // --- Peça nova ---
 
 T.peca1 = {
-  render: () => `${topo('Peça nova', '#/inicio')}
+  render: () => `${topo('Peça nova', S.adicionando ? '#/lista' : '#/inicio')}
     ${pergunta('Que peça é?', 'Se não quiser escrever, é só tocar em Continuar.')}
     <input class="texto" id="nome" value="${esc(S.atual?.nome)}" placeholder="Ex.: vestido de festa" autocomplete="off">
     ${continuar()}`,
@@ -281,22 +326,93 @@ T.peca2 = {
 
 const descricaoAtual = () => S.atual.nome || (S.atual.tipo === 'peca' ? 'Peça nova' : 'Conserto');
 
+function paraLista() {
+  const a = S.atual;
+  S.lista ||= { itens: [], lucro: a.lucro ?? S.hora.lucro };
+  S.lista.itens.push({ id: uid(), nome: descricaoAtual(), min: a.min, material: a.material, qtd: 1 });
+  S.atual = null; S.adicionando = false;
+  salvar(); ir('#/lista');
+}
+
 T.resultado = {
   render: () => {
     const a = S.atual;
-    const p = preco(S.hora, a.min, a.material);
+    a.lucro ??= S.hora.lucro;
+    const p = preco(S.hora, a.min, a.material, a.lucro);
     const naTabela = a.tipo === 'conserto' && (a.servicoId || S.servicos.some((s) => s.nome === a.nome));
     return `${topo('', '#/material')}
       <p class="sobre">${esc(descricaoAtual())} · ${tempoTxt(a.min)}${a.material ? ` · material ${brl(a.material)}` : ''}</p>
       <div class="preco minimo"><span>Não cobre menos de</span><strong>${brlRedondo(p.minimo)}</strong><p>Abaixo disso, você paga para trabalhar.</p></div>
       <div class="preco ideal"><span>O ideal é</span><strong>${brlRedondo(p.ideal)}</strong><p>Assim sobra um dinheiro para a sua costura crescer.</p></div>
+      ${lucroCtl(a.lucro)}
       <button class="btn principal" data-acao="orcamento">Fazer orçamento para a cliente</button>
+      <button class="btn secundario" data-acao="lista">Mais peças ou outro serviço</button>
       ${a.tipo === 'conserto' && !naTabela ? '<button class="btn secundario" data-acao="tabela">Colocar na minha tabela</button>' : ''}
       <a class="btn secundario" href="#/inicio">Calcular outro</a>`;
   },
+  lucroMenos() { S.atual.lucro = mudaLucro(S.atual.lucro, -0.05); salvar(); render(); },
+  lucroMais() { S.atual.lucro = mudaLucro(S.atual.lucro, 0.05); salvar(); render(); },
+  lista: paraLista,
   orcamento() {
-    const p = preco(S.hora, S.atual.min, S.atual.material);
+    const p = preco(S.hora, S.atual.min, S.atual.material, S.atual.lucro);
     S.orc = { descricao: descricaoAtual(), valor: p.ideal, minimo: p.minimo, cliente: '', prazo: somaDias(hojeISO(), 7), prazoOpcao: 7, obs: '' };
+    salvar(); ir('#/orc1');
+  },
+};
+
+// --- Vários serviços para a mesma cliente ---
+
+const resumoItens = (itens) => itens.map((i) => `${i.qtd > 1 ? `${i.qtd}× ` : ''}${i.nome}`).join(', ');
+const acharItem = (el) => S.lista.itens.find((i) => i.id === el.dataset.id);
+
+T.lista = {
+  render: () => {
+    const t = totalLista(S.hora, S.lista.itens, S.lista.lucro);
+    return `${topo('Serviços da cliente', '#/inicio')}
+      ${pergunta('Serviços da mesma cliente', 'Toque em + para mais peças iguais, como 2 barras de calça.')}
+      <div class="itens">${t.linhas.map((l) => `<div class="item">
+        <div class="item-nome"><b>${esc(l.nome)}</b><span>${brlRedondo(l.unIdeal)} cada · ${tempoTxt(l.min)}${l.material ? ` · material ${brl(l.material)}` : ''}</span></div>
+        <div class="item-qtd">
+          <button class="btn redondo" data-acao="menos" data-id="${l.id}" aria-label="Uma peça a menos de ${esc(l.nome)}">−</button>
+          <output aria-live="polite">${l.qtd}</output>
+          <button class="btn redondo" data-acao="mais" data-id="${l.id}" aria-label="Uma peça a mais de ${esc(l.nome)}">+</button>
+        </div>
+        <div class="item-total"><b>${brlRedondo(l.ideal)}</b><button class="link" data-acao="tirar" data-id="${l.id}">Tirar</button></div>
+      </div>`).join('')}</div>
+      <div class="mais-servico">
+        <button class="btn secundario" data-acao="outroConserto">+ Outro conserto</button>
+        <button class="btn secundario" data-acao="outraPeca">+ Peça nova</button>
+      </div>
+      <div class="preco minimo"><span>Não cobre menos de</span><strong>${brlRedondo(t.minimo)}</strong></div>
+      <div class="preco ideal"><span>O ideal é</span><strong>${brlRedondo(t.ideal)}</strong></div>
+      ${lucroCtl(S.lista.lucro)}
+      <button class="btn principal" data-acao="orcamento">Fazer orçamento para a cliente</button>
+      <button class="link" data-acao="limpar">Apagar a lista e começar de novo</button>`;
+  },
+  mais(el) { acharItem(el).qtd += 1; salvar(); render(); },
+  menos(el) { const i = acharItem(el); if (i.qtd > 1) { i.qtd -= 1; salvar(); render(); } else this.tirar(el); },
+  tirar(el) {
+    const i = acharItem(el);
+    if (!confirm(`Tirar ${i.nome} da lista?`)) return;
+    S.lista.itens = S.lista.itens.filter((x) => x.id !== i.id);
+    if (!S.lista.itens.length) { S.lista = null; salvar(); return ir('#/inicio'); }
+    salvar(); render();
+  },
+  lucroMenos() { S.lista.lucro = mudaLucro(S.lista.lucro, -0.05); salvar(); render(); },
+  lucroMais() { S.lista.lucro = mudaLucro(S.lista.lucro, 0.05); salvar(); render(); },
+  outroConserto() { S.adicionando = true; salvar(); ir('#/conserto'); },
+  outraPeca() { S.adicionando = true; S.atual = { tipo: 'peca', nome: '', min: 0, material: 0, outroTempo: false }; salvar(); ir('#/peca1'); },
+  limpar() {
+    if (!confirm('Apagar a lista? Os serviços dela vão sumir.')) return;
+    S.lista = null; salvar(); ir('#/inicio');
+  },
+  orcamento() {
+    const t = totalLista(S.hora, S.lista.itens, S.lista.lucro);
+    S.orc = {
+      descricao: resumoItens(t.linhas),
+      itens: t.linhas.map((l) => ({ nome: l.nome, qtd: l.qtd, valor: l.ideal })),
+      valor: t.ideal, minimo: t.minimo, cliente: '', prazo: somaDias(hojeISO(), 7), prazoOpcao: 7, obs: '',
+    };
     salvar(); ir('#/orc1');
   },
   tabela() {
@@ -309,7 +425,7 @@ T.resultado = {
 // --- Orçamento para a cliente ---
 
 T.orc1 = {
-  render: () => `${topo('Orçamento', '#/resultado')}
+  render: () => `${topo('Orçamento', S.orc.itens ? '#/lista' : '#/resultado')}
     ${pergunta('Qual o nome da cliente?')}
     <input class="texto" id="cliente" value="${esc(S.orc.cliente)}" placeholder="Ex.: Maria" autocomplete="off" autocapitalize="words">
     ${continuar()}`,
@@ -322,7 +438,8 @@ T.orc1 = {
 
 T.orc2 = {
   render: () => `${topo('Orçamento', '#/orc1')}
-    ${pergunta('Qual o valor?', `O valor ideal já está preenchido. O mínimo é ${brlRedondo(S.orc.minimo)}.`)}
+    ${pergunta(S.orc.itens ? 'Qual o valor total?' : 'Qual o valor?', `O valor ideal já está preenchido. O mínimo é ${brlRedondo(S.orc.minimo)}.`)}
+    ${S.orc.itens ? '<p class="ajuda">Se der um desconto, ele aparece no orçamento.</p>' : ''}
     ${campoDinheiro('valor', S.orc.valor, 'Valor do orçamento')}
     <p class="alerta" id="abaixo" ${S.orc.valor < S.orc.minimo ? '' : 'hidden'}>Esse valor está abaixo do mínimo. Você vai pagar para trabalhar.</p>
     ${continuar()}`,
@@ -392,6 +509,7 @@ function criarOrcamento() {
   const o = { id: uid(), criadoEm: hojeISO(), ...S.orc, entregue: false };
   delete o.prazoOpcao;
   S.orcamentos.unshift(o);
+  if (o.itens) S.lista = null; // a lista virou orçamento
   S.orc = null;
   salvar();
   ir(`#/pronto/${o.id}`);
@@ -482,7 +600,7 @@ T.tabela = {
     <div class="tabela-impressa">
       <h1 class="tabela-titulo">${esc(S.atelie.nome || 'Tabela de preços')}</h1>
       ${S.atelie.nome ? '<p class="tabela-sub">Tabela de preços</p>' : ''}
-      <ul class="tabela">${S.servicos.map((s) => `<li><button data-acao="ajustar" data-id="${s.id}"><span>${esc(s.nome)}</span><b>${brlRedondo(preco(S.hora, s.min, 0).ideal)}</b></button></li>`).join('')}</ul>
+      <ul class="tabela">${S.servicos.map((s) => `<li><button data-acao="ajustar" data-id="${s.id}"><span>${esc(s.nome)}</span><b>${brlRedondo(preco(S.hora, s.min, 0, S.hora.lucro).ideal)}</b></button></li>`).join('')}</ul>
       ${S.atelie.telefone ? `<p class="tabela-sub">${esc(S.atelie.telefone)}</p>` : ''}
     </div>
     <p class="ajuda nao-imprime">Os preços já são o valor ideal, sem material. Toque num serviço para ajustar o seu tempo.</p>
@@ -495,7 +613,7 @@ T.tabela = {
     salvar(); ir('#/tempo');
   },
   enviar() {
-    const texto = textoTabela(S.servicos.map((s) => [s.nome, preco(S.hora, s.min, 0).ideal]), S.atelie);
+    const texto = textoTabela(S.servicos.map((s) => [s.nome, preco(S.hora, s.min, 0, S.hora.lucro).ideal]), S.atelie);
     if (navigator.share) navigator.share({ text: texto }).catch(() => {});
     else window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
   },
@@ -514,7 +632,9 @@ function render() {
   // Telas do meio de um cálculo precisam de um cálculo em andamento.
   if (['tempo', 'material', 'resultado', 'outroNome', 'peca2'].includes(nome) && !S.atual) nome = 'inicio';
   if (nome.startsWith('orc') && nome.length === 4 && !S.orc) nome = 'inicio';
+  if (nome === 'lista' && !S.lista?.itens.length) nome = 'inicio';
   if (!S.configurado && !nome.startsWith('hora')) nome = 'inicio';
+  if (nome === 'inicio') S.adicionando = false;
   if (nome === 'peca1' && S.atual?.tipo !== 'peca') S.atual = { tipo: 'peca', nome: '', min: 0, material: 0, outroTempo: false };
   const tela = T[nome] || T.inicio;
   $app.innerHTML = tela.render(id);
