@@ -360,10 +360,10 @@ T.resultado = {
         ? `<div class="preco ideal"><span>Seu preço da tabela${a.material ? ' + material' : ''}</span><strong>${brlRedondo(p.ideal)}</strong>${p.ideal < p.minimo ? '<p class="alerta-preco">Atenção: está abaixo do mínimo. Reveja o preço na sua tabela.</p>' : '<p>É o preço que você definiu para este serviço.</p>'}</div>`
         : `<div class="preco ideal"><span>O ideal é</span><strong>${brlRedondo(p.ideal)}</strong><p>Assim sobra um dinheiro para a sua costura crescer.</p></div>
       ${lucroCtl(a.lucro)}`}
+      <button class="btn secundario adicionar" data-acao="lista">+ Adicionar outro serviço ou peça</button>
       <button class="btn principal" data-acao="orcamento">Fazer orçamento para a cliente</button>
-      <button class="btn secundario" data-acao="lista">Mais peças ou outro serviço</button>
       ${a.tipo === 'conserto' && !naTabela ? '<button class="btn secundario" data-acao="tabela">Colocar na minha tabela</button>' : ''}
-      <a class="btn secundario" href="#/inicio">Calcular outro</a>`;
+      <a class="btn secundario" href="#/inicio">Novo orçamento</a>`;
   },
   lucroMenos() { S.atual.lucro = mudaLucro(S.atual.lucro, -0.05); salvar(); render(); },
   lucroMais() { S.atual.lucro = mudaLucro(S.atual.lucro, 0.05); salvar(); render(); },
