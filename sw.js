@@ -1,6 +1,6 @@
 // Guarda o app no celular para abrir sem internet.
 // Ao publicar uma versão nova, mude VERSAO para o celular baixar os arquivos novos.
-const VERSAO = 'pf-v4';
+const VERSAO = 'pf-v5';
 const ARQUIVOS = [
   './', 'index.html', 'css/app.css', 'js/app.js', 'js/calc.js', 'js/orcamento.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
@@ -33,8 +33,9 @@ self.addEventListener('fetch', (e) => {
     return;
   }
   if (url.origin !== location.origin) return;
+  // Sempre confere com o site se o arquivo mudou, para a versão nova chegar inteira.
   e.respondWith(
-    fetch(req).then((res) => {
+    fetch(req.mode === 'navigate' ? req : new Request(req, { cache: 'no-cache' })).then((res) => {
       const copia = res.clone();
       caches.open(VERSAO).then((c) => c.put(req, copia));
       return res;

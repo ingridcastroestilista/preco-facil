@@ -177,3 +177,10 @@ textarea.texto { resize: vertical; }
 /* Selo de quem desenvolveu */
 .selo { margin: 40px 0 8px; text-align: center; font-size: 13px; letter-spacing: .02em; color: var(--ink-2); }
 .selo b { font-weight: 600; color: var(--marsala); }
+
+/* Convite para o curso (tela inicial) */
+.convite { margin: 28px 0 0; padding: 20px; border-radius: 20px; background: var(--marsala-claro); text-align: center; }
+.convite h2 { font: 600 23px/1.25 'Fraunces', Georgia, serif; margin: 0 0 8px; color: var(--marsala); }
+.convite p { margin: 0 0 16px; font-size: 18px; line-height: 1.45; }
+.convite .btn { margin: 0; }
+.convite .whats { color: #fff; }

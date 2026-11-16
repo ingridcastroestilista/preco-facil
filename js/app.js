@@ -97,6 +97,14 @@ function aviso(msg) {
 
 const T = {};
 
+// Convite para o curso: leva ao grupo da Ingrid Castro Academy no WhatsApp.
+const LINK_GRUPO = 'https://chat.whatsapp.com/IV4EsY83cfXJRgKowkGg8D?mode=gi_t';
+const conviteCurso = () => `<section class="convite">
+    <h2>Quer transformar a costura em negócio?</h2>
+    <p>Entre no grupo gratuito da <b>Ingrid Castro Academy</b> no WhatsApp e conheça o curso de <b>Precificação e Empreendedorismo</b>.</p>
+    <a class="btn whats" href="${LINK_GRUPO}" target="_blank" rel="noopener">Entrar no grupo do WhatsApp</a>
+  </section>`;
+
 T.inicio = {
   render() {
     if (!S.configurado) {
@@ -120,6 +128,7 @@ T.inicio = {
         <a class="btn secundario" href="#/tabela">Minha tabela de preços</a>
         <a class="btn secundario" href="#/hora1">Mudar o valor da minha hora</a>
       </div>
+      ${conviteCurso()}
       ${!instalado() ? `<p class="dica">${ehIOS() ? 'Dica: para guardar o app no celular, toque em <b>Compartilhar</b> e depois em <b>Adicionar à Tela de Início</b>.' : 'Dica: para guardar o app no celular, abra o menu do navegador e toque em <b>Adicionar à tela inicial</b>.'}</p>` : ''}`;
   },
 };
