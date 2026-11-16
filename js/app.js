@@ -115,8 +115,8 @@ T.inicio = {
       return `${topo()}
         <div class="boas-vindas">
           <img src="icons/icon.svg" alt="" width="88" height="88">
-          ${pergunta('Vamos descobrir quanto cobrar pelo seu trabalho', 'Primeiro, 4 perguntas rápidas sobre a sua costura. Você só faz isso uma vez.')}
-          <a class="btn principal" href="#/hora1">Começar</a>
+          ${pergunta('Vamos descobrir quanto cobrar pelo seu trabalho', 'Primeiro, 5 perguntas rápidas sobre você e a sua costura. Você só faz isso uma vez.')}
+          <a class="btn principal" href="#/hora0">Começar</a>
         </div>`;
     }
     return `${topo()}
@@ -139,8 +139,29 @@ T.inicio = {
 
 // --- Quanto vale a sua hora ---
 
+// No primeiro uso são 5 perguntas (a 1ª é o ateliê). Para mudar a hora depois, só as 4 da hora.
+const passoHora = (n) => (S.configurado ? `Pergunta ${n} de 4` : `Pergunta ${n + 1} de 5`);
+
+T.hora0 = {
+  render: () => `${topo('Pergunta 1 de 5', '#/inicio')}
+    ${pergunta('Como se chama o seu ateliê?', 'Aparece nos orçamentos e na tabela de preços que você manda para as clientes.')}
+    <input class="texto" id="i-nome" value="${esc(S.atelie.nome)}" placeholder="Ex.: Costura da Rosa" autocomplete="off" autocapitalize="words">
+    <h2>Seu WhatsApp <small>(opcional)</small></h2>
+    <input class="texto" id="i-tel" type="tel" inputmode="tel" value="${esc(S.atelie.telefone)}" placeholder="(11) 99999-9999">
+    <h2>Endereço <small>(opcional)</small></h2>
+    <input class="texto" id="i-end" value="${esc(S.atelie.endereco)}" placeholder="Ex.: Rua das Flores, 120" autocomplete="off">
+    <p class="ajuda">Dá para mudar depois, na engrenagem da tela inicial.</p>
+    ${continuar()}`,
+  continuar() {
+    const nome = document.getElementById('i-nome').value.trim();
+    if (!nome) return aviso('Escreva o nome do seu ateliê.');
+    S.atelie = { nome, telefone: document.getElementById('i-tel').value.trim(), endereco: document.getElementById('i-end').value.trim() };
+    salvar(); ir('#/hora1');
+  },
+};
+
 T.hora1 = {
-  render: () => `${topo('Pergunta 1 de 4', '#/inicio')}
+  render: () => `${topo(passoHora(1), S.configurado ? '#/inicio' : '#/hora0')}
     ${pergunta('Quanto você quer ganhar por mês com a costura?', 'É o dinheiro que fica para você, como um salário.')}
     ${campoDinheiro('ganhar', S.hora.ganhar, 'Quanto quer ganhar')}
     ${continuar()}`,
@@ -155,7 +176,7 @@ const ITENS_GASTOS = [['luz', 'Luz (parte da costura)'], ['linha', 'Linha, agulh
 let ajudaSomar = false;
 
 T.hora2 = {
-  render: () => `${topo('Pergunta 2 de 4', '#/hora1')}
+  render: () => `${topo(passoHora(2), '#/hora1')}
     ${pergunta('Quanto você gasta por mês com a costura?', 'Pense em: luz, linha, agulha, conserto da máquina, transporte.')}
     ${campoDinheiro('gastos', S.hora.gastos, 'Quanto gasta por mês')}
     ${ajudaSomar ? `<div class="somar">${ITENS_GASTOS.map(([k, t]) => `<label class="item-soma"><span>${t}</span>
@@ -170,7 +191,7 @@ T.hora2 = {
 };
 
 T.hora3 = {
-  render: () => `${topo('Pergunta 3 de 4', '#/hora2')}
+  render: () => `${topo(passoHora(3), '#/hora2')}
     ${pergunta('Quantos dias por semana você costura?')}
     ${opcoes('dias', [1, 2, 3, 4, 5, 6, 7].map((d) => [d, d]), S.hora.dias)}
     <h2>E quantas horas por dia?</h2>
@@ -188,7 +209,7 @@ T.hora4 = {
   render: () => {
     const l = S.hora.lucro;
     const marcado = outroLucro || !LUCROS.includes(l) ? 'outro' : l;
-    return `${topo('Pergunta 4 de 4', '#/hora3')}
+    return `${topo(passoHora(4), '#/hora3')}
       ${pergunta('Quanto de lucro você quer?', 'O lucro é o que sobra depois de pagar o seu ganho e os gastos. Ele ajuda a costura a crescer: comprar uma máquina, fazer um curso.')}
       ${opcoes('lucro', [...LUCROS.map((v) => [v, pctTxt(v)]), ['outro', 'Outro']], marcado)}
       ${marcado === 'outro' ? `<h2>Quantos por cento?</h2><label class="dinheiro"><input id="lucro" inputmode="decimal" value="${Math.round(l * 100)}" placeholder="20"><b>%</b></label>` : ''}
@@ -714,7 +735,10 @@ T.ajustes = {
     <h2 class="ajustes-sec">Seus preços</h2>
     <a class="btn secundario" href="#/tabela">Minha tabela de preços</a>
     <a class="btn secundario" href="#/hora1">Mudar o valor da minha hora</a>
-    <p class="ajuda">Sua hora vale <b>${brl(valorDaHora(S.hora))}</b>, com lucro de <b>${pctTxt(S.hora.lucro)}</b>.</p>`,
+    <p class="ajuda">Sua hora vale <b>${brl(valorDaHora(S.hora))}</b>, com lucro de <b>${pctTxt(S.hora.lucro)}</b>.</p>
+    <h2 class="ajustes-sec">Começar do zero</h2>
+    <p class="ajuda">Apaga tudo deste celular: o valor da hora, a tabela de preços, os orçamentos e os dados do ateliê. O app volta como novo.</p>
+    <button class="btn perigo" data-acao="apagarTudo">Apagar tudo e começar de novo</button>`,
   salvar() {
     S.atelie = {
       nome: document.getElementById('a-nome').value.trim(),
@@ -722,6 +746,11 @@ T.ajustes = {
       endereco: document.getElementById('a-end').value.trim(),
     };
     salvar(); aviso('Dados do ateliê salvos'); ir('#/inicio');
+  },
+  apagarTudo() {
+    if (!confirm('Apagar TUDO deste celular? O valor da hora, a tabela, os orçamentos e os dados do ateliê vão sumir.')) return;
+    if (!confirm('Tem certeza? Isso não pode ser desfeito.')) return;
+    S = inicial(); salvar(); aviso('Tudo apagado. Vamos começar de novo!'); ir('#/inicio');
   },
 };
 
