@@ -1,4 +1,4 @@
-import { valorDaHora, preco, totalLista, lucroValido, LUCRO, tempoTxt, hojeISO, somaDias, dataBR, diaMes } from './calc.js';
+import { valorDaHora, preco, totalLista, lucroValido, LUCRO, tempoTxt, hojeISO, somaDias, dataBR, diaMes, formatarTelefone } from './calc.js';
 import { imagemOrcamento, textoOrcamento, textoTabela } from './orcamento.js';
 
 // ---------- Dados no aparelho ----------
@@ -17,7 +17,7 @@ function inicial() {
     hora: { ganhar: 0, gastos: 0, dias: 5, horas: 6, itens: {}, lucro: LUCRO },
     configurado: false,
     servicos: SERVICOS.map(([nome, min]) => ({ id: uid(), nome, min })),
-    atelie: { nome: '', telefone: '' },
+    atelie: { nome: '', telefone: '', endereco: '' },
     atual: null, // cálculo em andamento
     orc: null,   // orçamento em andamento
     lista: null, // vários serviços para a mesma cliente: { itens, lucro }
@@ -29,6 +29,7 @@ function inicial() {
 let S;
 try { S = { ...inicial(), ...JSON.parse(localStorage.getItem(CHAVE)) }; } catch { S = inicial(); }
 S.hora.lucro ??= LUCRO; // quem configurou antes do lucro ajustável
+S.atelie = { nome: '', telefone: '', endereco: '', ...S.atelie };
 const salvar = () => { try { localStorage.setItem(CHAVE, JSON.stringify(S)); } catch { /* sem espaço */ } };
 if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 
@@ -53,10 +54,13 @@ const mostrarNum = (v) => (v ? v.toLocaleString('pt-BR', { maximumFractionDigits
 
 const $app = document.getElementById('app');
 
+const ENGRENAGEM = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+
 function topo(titulo, voltar) {
   return `<header class="topo">
     ${voltar ? `<a class="voltar" href="${voltar}">‹ Voltar</a>` : '<span class="marca">Preço Fácil</span>'}
     ${titulo ? `<span class="passo">${titulo}</span>` : ''}
+    ${!voltar && S.configurado ? `<a class="engrenagem" href="#/ajustes" aria-label="Ajustes">${ENGRENAGEM}</a>` : ''}
   </header>`;
 }
 
@@ -226,7 +230,7 @@ T.conserto = {
     </div>`,
   escolher(el) {
     const s = S.servicos.find((x) => x.id === el.dataset.id);
-    S.atual = { tipo: 'conserto', servicoId: s.id, nome: s.nome, min: s.min, material: 0, temMaterial: false };
+    S.atual = { tipo: 'conserto', servicoId: s.id, nome: s.nome, min: s.min, material: 0, temMaterial: false, fixo: s.preco || 0 };
     salvar(); ir('#/tempo');
   },
   outro() { S.atual = { tipo: 'conserto', servicoId: null, nome: '', min: 30, material: 0, temMaterial: false }; salvar(); ir('#/outroNome'); },
@@ -338,7 +342,7 @@ const descricaoAtual = () => S.atual.nome || (S.atual.tipo === 'peca' ? 'Peça n
 function paraLista() {
   const a = S.atual;
   S.lista ||= { itens: [], lucro: a.lucro ?? S.hora.lucro };
-  S.lista.itens.push({ id: uid(), nome: descricaoAtual(), min: a.min, material: a.material, qtd: 1 });
+  S.lista.itens.push({ id: uid(), nome: descricaoAtual(), min: a.min, material: a.material, qtd: 1, fixo: a.fixo || 0 });
   S.atual = null; S.adicionando = false;
   salvar(); ir('#/lista');
 }
@@ -347,13 +351,15 @@ T.resultado = {
   render: () => {
     const a = S.atual;
     a.lucro ??= S.hora.lucro;
-    const p = preco(S.hora, a.min, a.material, a.lucro);
+    const p = preco(S.hora, a.min, a.material, a.lucro, a.fixo);
     const naTabela = a.tipo === 'conserto' && (a.servicoId || S.servicos.some((s) => s.nome === a.nome));
     return `${topo('', '#/material')}
       <p class="sobre">${esc(descricaoAtual())} · ${tempoTxt(a.min)}${a.material ? ` · material ${brl(a.material)}` : ''}</p>
       <div class="preco minimo"><span>Não cobre menos de</span><strong>${brlRedondo(p.minimo)}</strong><p>Abaixo disso, você paga para trabalhar.</p></div>
-      <div class="preco ideal"><span>O ideal é</span><strong>${brlRedondo(p.ideal)}</strong><p>Assim sobra um dinheiro para a sua costura crescer.</p></div>
-      ${lucroCtl(a.lucro)}
+      ${p.fixo
+        ? `<div class="preco ideal"><span>Seu preço da tabela${a.material ? ' + material' : ''}</span><strong>${brlRedondo(p.ideal)}</strong>${p.ideal < p.minimo ? '<p class="alerta-preco">Atenção: está abaixo do mínimo. Reveja o preço na sua tabela.</p>' : '<p>É o preço que você definiu para este serviço.</p>'}</div>`
+        : `<div class="preco ideal"><span>O ideal é</span><strong>${brlRedondo(p.ideal)}</strong><p>Assim sobra um dinheiro para a sua costura crescer.</p></div>
+      ${lucroCtl(a.lucro)}`}
       <button class="btn principal" data-acao="orcamento">Fazer orçamento para a cliente</button>
       <button class="btn secundario" data-acao="lista">Mais peças ou outro serviço</button>
       ${a.tipo === 'conserto' && !naTabela ? '<button class="btn secundario" data-acao="tabela">Colocar na minha tabela</button>' : ''}
@@ -363,7 +369,7 @@ T.resultado = {
   lucroMais() { S.atual.lucro = mudaLucro(S.atual.lucro, 0.05); salvar(); render(); },
   lista: paraLista,
   orcamento() {
-    const p = preco(S.hora, S.atual.min, S.atual.material, S.atual.lucro);
+    const p = preco(S.hora, S.atual.min, S.atual.material, S.atual.lucro, S.atual.fixo);
     S.orc = { descricao: descricaoAtual(), valor: p.ideal, minimo: p.minimo, cliente: '', prazo: somaDias(hojeISO(), 7), prazoOpcao: 7, obs: '' };
     salvar(); ir('#/orc1');
   },
@@ -502,13 +508,13 @@ T.atelie = {
   render: () => `${topo('Orçamento', '#/orc4')}
     ${pergunta('Qual o nome do seu ateliê?', 'Ele aparece no topo do orçamento. Você só preenche uma vez.')}
     <input class="texto" id="nome" value="${esc(S.atelie.nome)}" placeholder="Ex.: Costura da Rosa" autocomplete="off">
-    <h2>E o seu telefone? <small>(opcional)</small></h2>
+    <h2>E o seu WhatsApp? <small>(opcional)</small></h2>
     <input class="texto" id="tel" type="tel" inputmode="tel" value="${esc(S.atelie.telefone)}" placeholder="(11) 99999-9999">
     ${continuar('continuar', 'Ver o orçamento')}`,
   continuar() {
     const nome = document.getElementById('nome').value.trim();
     if (!nome) return aviso('Escreva o nome do ateliê.');
-    S.atelie = { nome, telefone: document.getElementById('tel').value.trim() };
+    S.atelie = { ...S.atelie, nome, telefone: document.getElementById('tel').value.trim() };
     salvar();
     if (S.orc) criarOrcamento(); else ir('#/tabela');
   },
@@ -604,30 +610,119 @@ T.orcamento = {
 
 // --- Minha tabela de preços ---
 
+const precoServico = (s) => preco(S.hora, s.min, 0, S.hora.lucro, s.preco).ideal;
+
 T.tabela = {
   render: () => `${topo('Minha tabela de preços', '#/inicio')}
     <div class="tabela-impressa">
       <h1 class="tabela-titulo">${esc(S.atelie.nome || 'Tabela de preços')}</h1>
       ${S.atelie.nome ? '<p class="tabela-sub">Tabela de preços</p>' : ''}
-      <ul class="tabela">${S.servicos.map((s) => `<li><button data-acao="ajustar" data-id="${s.id}"><span>${esc(s.nome)}</span><b>${brlRedondo(preco(S.hora, s.min, 0, S.hora.lucro).ideal)}</b></button></li>`).join('')}</ul>
-      ${S.atelie.telefone ? `<p class="tabela-sub">${esc(S.atelie.telefone)}</p>` : ''}
+      <ul class="tabela">${S.servicos.map((s) => `<li><button data-acao="editar" data-id="${s.id}"><span>${esc(s.nome)}</span><b>${brlRedondo(precoServico(s))}</b></button></li>`).join('')}</ul>
+      ${S.atelie.telefone ? `<p class="tabela-sub">WhatsApp ${esc(S.atelie.telefone)}</p>` : ''}
+      ${S.atelie.endereco ? `<p class="tabela-sub">${esc(S.atelie.endereco)}</p>` : ''}
     </div>
-    <p class="ajuda nao-imprime">Os preços já são o valor ideal, sem material. Toque num serviço para ajustar o seu tempo.</p>
+    <p class="ajuda nao-imprime">Toque num serviço para mudar o nome, o tempo ou colocar o seu próprio preço.</p>
+    <button class="btn secundario nao-imprime" data-acao="novo">+ Novo serviço</button>
     <button class="btn principal whats nao-imprime" data-acao="enviar">Mandar pelo WhatsApp</button>
-    <button class="btn secundario nao-imprime" data-acao="imprimir">Imprimir</button>
-    <button class="btn secundario nao-imprime" data-acao="nome">${S.atelie.nome ? 'Mudar o nome do ateliê' : 'Colocar o nome do ateliê'}</button>`,
-  ajustar(el) {
-    const s = S.servicos.find((x) => x.id === el.dataset.id);
-    S.atual = { tipo: 'conserto', servicoId: s.id, nome: s.nome, min: s.min, material: 0, temMaterial: false };
-    salvar(); ir('#/tempo');
-  },
+    <button class="btn secundario nao-imprime" data-acao="imprimir">Imprimir</button>`,
+  editar(el) { S.edit = null; ir(`#/servico/${el.dataset.id}`); },
+  novo() { S.edit = null; ir('#/servico/novo'); },
   enviar() {
-    const texto = textoTabela(S.servicos.map((s) => [s.nome, preco(S.hora, s.min, 0, S.hora.lucro).ideal]), S.atelie);
+    const texto = textoTabela(S.servicos.map((s) => [s.nome, precoServico(s)]), S.atelie);
     if (navigator.share) navigator.share({ text: texto }).catch(() => {});
     else window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
   },
   imprimir: () => window.print(),
-  nome() { S.orc = null; ir('#/atelie'); },
+};
+
+// Editar (ou criar) um serviço da tabela: nome, tempo, preço do app ou preço dela, ordem e apagar.
+T.servico = {
+  render(id) {
+    const s = S.servicos.find((x) => x.id === id);
+    if (!S.edit || S.edit.id !== id) S.edit = { id, nome: s?.nome || '', min: s?.min || 30, proprio: !!s?.preco, preco: s?.preco || 0 };
+    const e = S.edit;
+    const calc = preco(S.hora, e.min, 0, S.hora.lucro);
+    const i = S.servicos.indexOf(s);
+    return `${topo(s ? 'Editar serviço' : 'Novo serviço', '#/tabela')}
+      <h2>Nome do serviço</h2>
+      <input class="texto" id="nome-servico" value="${esc(e.nome)}" placeholder="Ex.: Barra de vestido" autocomplete="off">
+      <h2>Quanto tempo você leva?</h2>
+      <div class="ajuste-tempo">
+        <button class="btn redondo" data-acao="menos" aria-label="Menos 5 minutos">− 5 min</button>
+        <output aria-live="polite">${tempoTxt(e.min)}</output>
+        <button class="btn redondo" data-acao="mais" aria-label="Mais 5 minutos">+ 5 min</button>
+      </div>
+      <h2>Preço</h2>
+      ${opcoes('qualPreco', [['app', `Do app: ${brlRedondo(calc.ideal)}`], ['meu', 'O meu preço']], e.proprio ? 'meu' : 'app')}
+      ${e.proprio ? `${campoDinheiro('preco-servico', e.preco, 'Seu preço')}
+        <p class="ajuda">O app sugere ${brlRedondo(calc.ideal)}. Não cobre menos de ${brlRedondo(calc.minimo)}.</p>` : '<p class="ajuda">O preço muda sozinho se você mudar o valor da sua hora ou o lucro.</p>'}
+      ${continuar('salvar', 'Salvar')}
+      ${s ? `<div class="mover">
+          <button class="btn secundario" data-acao="subir" ${i <= 0 ? 'disabled' : ''}>↑ Subir na lista</button>
+          <button class="btn secundario" data-acao="descer" ${i >= S.servicos.length - 1 ? 'disabled' : ''}>↓ Descer</button>
+        </div>
+        <button class="btn perigo" data-acao="apagar">Apagar este serviço</button>` : ''}`;
+  },
+  lerTela() {
+    const e = S.edit;
+    e.nome = document.getElementById('nome-servico')?.value.trim() ?? e.nome;
+    const p = document.getElementById('preco-servico');
+    if (p) e.preco = lerNum(p.value);
+  },
+  menos() { this.lerTela(); S.edit.min = Math.max(5, S.edit.min - 5); render(); },
+  mais() { this.lerTela(); S.edit.min += 5; render(); },
+  qualPreco(el) { this.lerTela(); S.edit.proprio = el.dataset.v === 'meu'; render(); if (S.edit.proprio) document.getElementById('preco-servico')?.focus(); },
+  salvar() {
+    this.lerTela();
+    const e = S.edit;
+    if (!e.nome) return aviso('Escreva o nome do serviço.');
+    if (e.proprio && !e.preco) return aviso('Escreva o seu preço.');
+    let s = S.servicos.find((x) => x.id === e.id);
+    if (!s) { s = { id: uid() }; S.servicos.push(s); }
+    Object.assign(s, { nome: e.nome, min: e.min, preco: e.proprio ? e.preco : 0 });
+    S.edit = null; salvar(); aviso('Serviço salvo'); ir('#/tabela');
+  },
+  mover(d) {
+    const i = S.servicos.findIndex((x) => x.id === S.edit.id);
+    const j = i + d;
+    if (i < 0 || j < 0 || j >= S.servicos.length) return;
+    [S.servicos[i], S.servicos[j]] = [S.servicos[j], S.servicos[i]];
+    salvar(); this.lerTela(); render();
+  },
+  subir() { this.mover(-1); },
+  descer() { this.mover(1); },
+  apagar() {
+    const s = S.servicos.find((x) => x.id === S.edit.id);
+    if (!confirm(`Apagar "${s.nome}" da sua tabela?`)) return;
+    S.servicos = S.servicos.filter((x) => x.id !== s.id);
+    S.edit = null; salvar(); aviso('Serviço apagado'); ir('#/tabela');
+  },
+};
+
+// --- Ajustes ---
+
+T.ajustes = {
+  render: () => `${topo('Ajustes', '#/inicio')}
+    ${pergunta('Seu ateliê', 'Aparece no orçamento e na tabela de preços que você manda para a cliente.')}
+    <h2>Nome do ateliê</h2>
+    <input class="texto" id="a-nome" value="${esc(S.atelie.nome)}" placeholder="Ex.: Costura da Rosa" autocomplete="off">
+    <h2>WhatsApp</h2>
+    <input class="texto" id="a-tel" type="tel" inputmode="tel" value="${esc(S.atelie.telefone)}" placeholder="(11) 99999-9999">
+    <h2>Endereço <small>(opcional)</small></h2>
+    <input class="texto" id="a-end" value="${esc(S.atelie.endereco)}" placeholder="Ex.: Rua das Flores, 120" autocomplete="off">
+    ${continuar('salvar', 'Salvar')}
+    <h2 class="ajustes-sec">Seus preços</h2>
+    <a class="btn secundario" href="#/tabela">Minha tabela de preços</a>
+    <a class="btn secundario" href="#/hora1">Mudar o valor da minha hora</a>
+    <p class="ajuda">Sua hora vale <b>${brl(valorDaHora(S.hora))}</b>, com lucro de <b>${pctTxt(S.hora.lucro)}</b>.</p>`,
+  salvar() {
+    S.atelie = {
+      nome: document.getElementById('a-nome').value.trim(),
+      telefone: document.getElementById('a-tel').value.trim(),
+      endereco: document.getElementById('a-end').value.trim(),
+    };
+    salvar(); aviso('Dados do ateliê salvos'); ir('#/inicio');
+  },
 };
 
 // ---------- Navegação ----------
@@ -678,6 +773,10 @@ document.addEventListener('input', (ev) => {
     const total = Object.values(S.hora.itens).reduce((t, v) => t + (v || 0), 0);
     document.getElementById('gastos').value = mostrarNum(total);
     salvar();
+  }
+  if (el.type === 'tel' && el.selectionStart === el.value.length) {
+    const f = formatarTelefone(el.value);
+    if (f !== el.value) el.value = f;
   }
   if (el.id === 'valor') document.getElementById('abaixo').hidden = !(lerNum(el.value) && lerNum(el.value) < S.orc.minimo);
 });

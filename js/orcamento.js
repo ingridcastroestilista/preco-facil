@@ -23,7 +23,8 @@ export function textoOrcamento(o, atelie) {
     o.obs ? `Observação: ${o.obs}` : null,
     '',
     `Orçamento válido até ${dataBR(somaDias(o.criadoEm, VALIDADE_DIAS))}`,
-    atelie.telefone || null,
+    atelie.telefone ? `WhatsApp ${atelie.telefone}` : null,
+    atelie.endereco || null,
   ].filter((l) => l !== null).join('\n');
 }
 
@@ -33,7 +34,8 @@ export function textoTabela(itens, atelie) {
     '',
     ...itens.map(([nome, v]) => `${nome}: ${fmt.format(v)}`),
     '',
-    atelie.telefone || null,
+    atelie.telefone ? `WhatsApp ${atelie.telefone}` : null,
+    atelie.endereco || null,
   ].filter((l) => l !== null).join('\n').trim();
 }
 
@@ -91,7 +93,7 @@ export async function imagemOrcamento(o, atelie) {
 
   const topoAlt = 230;
   const corpo = blocos.reduce((t, b) => t + b.gap + b.ls.length * b.alt, 0);
-  const rodape = atelie.telefone ? 140 : 70;
+  const rodape = atelie.telefone && atelie.endereco ? 190 : atelie.telefone || atelie.endereco ? 140 : 70;
   c.width = W;
   c.height = topoAlt + corpo + rodape;
 
@@ -132,12 +134,22 @@ export async function imagemOrcamento(o, atelie) {
     }
   });
 
-  if (atelie.telefone) {
+  if (atelie.telefone || atelie.endereco) {
+    const alt = atelie.telefone && atelie.endereco ? 160 : 110;
     ctx.fillStyle = '#F4F2F0';
-    ctx.fillRect(0, c.height - 110, W, 110);
-    ctx.fillStyle = MARSALA;
-    ctx.font = `600 40px ${sans}`;
-    ctx.fillText(atelie.telefone, M, c.height - 42);
+    ctx.fillRect(0, c.height - alt, W, alt);
+    let yr = c.height - alt + 66;
+    if (atelie.telefone) {
+      ctx.fillStyle = MARSALA;
+      ctx.font = `600 40px ${sans}`;
+      ctx.fillText(`WhatsApp ${atelie.telefone}`, M, yr);
+      yr += 52;
+    }
+    if (atelie.endereco) {
+      ctx.fillStyle = '#5B524D';
+      ctx.font = `400 32px ${sans}`;
+      ctx.fillText(linhas(ctx, atelie.endereco, W - 2 * M)[0], M, atelie.telefone ? yr : yr + 4);
+    }
   }
 
   return new Promise((ok) => c.toBlob(ok, 'image/png'));

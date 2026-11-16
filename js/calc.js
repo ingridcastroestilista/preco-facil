@@ -23,21 +23,20 @@ export const arredondar5 = (v) => (v > 0 ? Math.ceil(Math.round(v * 100) / 500) 
 // Lucro entre 0% e 70%; sem valor, usa o padrão.
 export const lucroValido = (l) => Math.min(LUCRO_MAX, Math.max(0, l == null ? LUCRO : n(l)));
 
-// minutos de trabalho + material → preço mínimo e ideal (com o lucro escolhido)
-export function preco(h, minutos, material, lucro = LUCRO) {
+// minutos de trabalho + material → preço mínimo e ideal (com o lucro escolhido).
+// fixo: o preço que ela mesma definiu na tabela para esse serviço (o material soma por cima).
+export function preco(h, minutos, material, lucro = LUCRO, fixo = 0) {
   const custo = (n(minutos) / 60) * valorDaHora(h) + n(material);
   const comReserva = custo * (1 + RESERVA);
-  return {
-    custo,
-    minimo: arredondar5(comReserva),
-    ideal: arredondar5(comReserva / (1 - lucroValido(lucro))),
-  };
+  const minimo = arredondar5(comReserva);
+  if (n(fixo) > 0) return { custo, minimo, ideal: Math.round((n(fixo) + n(material)) * 100) / 100, fixo: true };
+  return { custo, minimo, ideal: arredondar5(comReserva / (1 - lucroValido(lucro))) };
 }
 
 // Vários serviços para a mesma cliente: preço de cada um (já arredondado) × quantidade.
 export function totalLista(h, itens, lucro) {
   const linhas = itens.map((i) => {
-    const p = preco(h, i.min, i.material, lucro);
+    const p = preco(h, i.min, i.material, lucro, i.fixo);
     const qtd = Math.max(1, Math.round(n(i.qtd) || 1));
     return { ...i, qtd, unMinimo: p.minimo, unIdeal: p.ideal, minimo: p.minimo * qtd, ideal: p.ideal * qtd };
   });
@@ -69,3 +68,18 @@ export function somaDias(iso, dias) {
 
 export const dataBR = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
 export const diaMes = (iso) => dataBR(iso).slice(0, 5);
+
+// Telefone enquanto ela digita: "11987654321" → "(11) 98765-4321". Com "+" fica como está.
+export function formatarTelefone(v) {
+  const txt = String(v || '');
+  if (txt.trim().startsWith('+')) return txt;
+  let d = txt.replace(/\D/g, '');
+  if (d.length > 11 && d.startsWith('55')) d = d.slice(2);
+  d = d.slice(0, 11);
+  if (!d) return '';
+  if (d.length <= 2) return `(${d}`;
+  const r = d.slice(2);
+  if (r.length <= 4) return `(${d.slice(0, 2)}) ${r}`;
+  const corte = r.length === 9 ? 5 : 4;
+  return `(${d.slice(0, 2)}) ${r.slice(0, corte)}-${r.slice(corte)}`;
+}
