@@ -173,3 +173,7 @@ textarea.texto { resize: vertical; }
 .item-total .link { padding: 4px 0; font-size: 17px; }
 .mais-servico { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .mais-servico .btn { margin: 0; min-height: 58px; font-size: 18px; padding: 10px; }
+
+/* Selo de quem desenvolveu */
+.selo { margin: 40px 0 8px; text-align: center; font-size: 13px; letter-spacing: .02em; color: var(--ink-2); }
+.selo b { font-weight: 600; color: var(--marsala); }

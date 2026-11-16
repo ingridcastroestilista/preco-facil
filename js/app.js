@@ -637,7 +637,7 @@ function render() {
   if (nome === 'inicio') S.adicionando = false;
   if (nome === 'peca1' && S.atual?.tipo !== 'peca') S.atual = { tipo: 'peca', nome: '', min: 0, material: 0, outroTempo: false };
   const tela = T[nome] || T.inicio;
-  $app.innerHTML = tela.render(id);
+  $app.innerHTML = tela.render(id) + '<p class="selo">Desenvolvido por <b>Ingrid Castro Academy</b></p>';
   $app.dataset.tela = nome;
   window.scrollTo(0, 0);
   const foco = $app.querySelector('input:not([type=date]), textarea');
