@@ -1,5 +1,6 @@
 import { valorDaHora, preco, totalLista, lucroValido, LUCRO, tempoTxt, hojeISO, somaDias, dataBR, diaMes, formatarTelefone } from './calc.js';
 import { imagemOrcamento, textoOrcamento, textoTabela } from './orcamento.js';
+import { usarMoeda, dinheiro, dinheiroRedondo, simbolo, opcoesMoeda } from './moeda.js';
 
 // ---------- Dados no aparelho ----------
 
@@ -18,6 +19,7 @@ function inicial() {
     configurado: false,
     servicos: SERVICOS.map(([nome, min]) => ({ id: uid(), nome, min })),
     atelie: { nome: '', telefone: '', endereco: '' },
+    moeda: 'BRL', // moeda dos valores (escolhida no começo ou nos Ajustes)
     atual: null, // cálculo em andamento
     orc: null,   // orçamento em andamento
     lista: null, // vários serviços para a mesma cliente: { itens, lucro }
@@ -36,12 +38,12 @@ if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 // ---------- Formatação ----------
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-const brl = (v) => fmt.format(v || 0);
-const brlRedondo = (v) => (Number.isInteger(v) ? `R$ ${v.toLocaleString('pt-BR')}` : brl(v));
+// Valores na moeda escolhida (o nome brl ficou do tempo em que era só real).
+const brl = (v) => dinheiro(v || 0);
+const brlRedondo = (v) => dinheiroRedondo(v);
 
 function lerNum(s) {
-  s = String(s ?? '').replace(/[R$\s]/g, '');
+  s = String(s ?? '').replace(/[^\d,.-]/g, ''); // tira símbolo da moeda e espaços
   if (!s) return 0;
   if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
   else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
@@ -67,7 +69,7 @@ function topo(titulo, voltar) {
 const pergunta = (texto, ajuda = '') => `<h1>${texto}</h1>${ajuda ? `<p class="ajuda">${ajuda}</p>` : ''}`;
 
 const campoDinheiro = (id, valor, rotulo) => `
-  <label class="dinheiro"><span class="sr">${rotulo}</span><b>R$</b>
+  <label class="dinheiro"><span class="sr">${rotulo}</span><b>${simbolo()}</b>
     <input id="${id}" inputmode="decimal" autocomplete="off" value="${esc(mostrarNum(valor))}" placeholder="0">
   </label>`;
 
@@ -150,12 +152,15 @@ T.hora0 = {
     <input class="texto" id="i-tel" type="tel" inputmode="tel" value="${esc(S.atelie.telefone)}" placeholder="(11) 99999-9999">
     <h2>Endereço <small>(opcional)</small></h2>
     <input class="texto" id="i-end" value="${esc(S.atelie.endereco)}" placeholder="Ex.: Rua das Flores, 120" autocomplete="off">
-    <p class="ajuda">Dá para mudar depois, na engrenagem da tela inicial.</p>
+    <h2>Moeda</h2>
+    <select class="texto seletor-moeda" id="i-moeda" aria-label="Moeda">${opcoesMoeda(S.moeda)}</select>
+    <p class="ajuda">Dá para mudar depois, na engrenagem da tela inicial. Fora do Brasil, escreva o WhatsApp começando com + e o código do país.</p>
     ${continuar()}`,
   continuar() {
     const nome = document.getElementById('i-nome').value.trim();
     if (!nome) return aviso('Escreva o nome do seu ateliê.');
     S.atelie = { nome, telefone: document.getElementById('i-tel').value.trim(), endereco: document.getElementById('i-end').value.trim() };
+    S.moeda = document.getElementById('i-moeda').value;
     salvar(); ir('#/hora1');
   },
 };
@@ -180,7 +185,7 @@ T.hora2 = {
     ${pergunta('Quanto você gasta por mês com a costura?', 'Pense em: luz, linha, agulha, conserto da máquina, transporte.')}
     ${campoDinheiro('gastos', S.hora.gastos, 'Quanto gasta por mês')}
     ${ajudaSomar ? `<div class="somar">${ITENS_GASTOS.map(([k, t]) => `<label class="item-soma"><span>${t}</span>
-        <span class="mini-dinheiro">R$ <input inputmode="decimal" data-item="${k}" value="${esc(mostrarNum(S.hora.itens[k]))}" placeholder="0"></span></label>`).join('')}</div>`
+        <span class="mini-dinheiro">${simbolo()} <input inputmode="decimal" data-item="${k}" value="${esc(mostrarNum(S.hora.itens[k]))}" placeholder="0"></span></label>`).join('')}</div>`
       : '<button class="link" data-acao="ajudar">Me ajude a somar</button>'}
     ${continuar()}`,
   ajudar() { ajudaSomar = true; render(); },
@@ -731,6 +736,9 @@ T.ajustes = {
     <input class="texto" id="a-tel" type="tel" inputmode="tel" value="${esc(S.atelie.telefone)}" placeholder="(11) 99999-9999">
     <h2>Endereço <small>(opcional)</small></h2>
     <input class="texto" id="a-end" value="${esc(S.atelie.endereco)}" placeholder="Ex.: Rua das Flores, 120" autocomplete="off">
+    <h2>Moeda</h2>
+    <select class="texto seletor-moeda" id="a-moeda" aria-label="Moeda">${opcoesMoeda(S.moeda)}</select>
+    <p class="ajuda">Para quem trabalha fora do Brasil. Os valores já digitados não são convertidos.</p>
     ${continuar('salvar', 'Salvar')}
     <h2 class="ajustes-sec">Seus preços</h2>
     <a class="btn secundario" href="#/tabela">Minha tabela de preços</a>
@@ -745,6 +753,7 @@ T.ajustes = {
       telefone: document.getElementById('a-tel').value.trim(),
       endereco: document.getElementById('a-end').value.trim(),
     };
+    S.moeda = document.getElementById('a-moeda').value;
     salvar(); aviso('Dados do ateliê salvos'); ir('#/inicio');
   },
   apagarTudo() {
@@ -761,6 +770,7 @@ const rotaId = () => rota()[1];
 const ir = (h) => { if (location.hash === h) render(); else location.hash = h; };
 
 function render() {
+  usarMoeda(S.moeda);
   let [nome, id] = rota();
   // Telas do meio de um cálculo precisam de um cálculo em andamento.
   if (['tempo', 'material', 'resultado', 'outroNome', 'peca2'].includes(nome) && !S.atual) nome = 'inicio';

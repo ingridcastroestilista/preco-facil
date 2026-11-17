@@ -1,8 +1,8 @@
 // O orçamento que vai para a cliente: imagem (para o WhatsApp) e texto.
 import { dataBR, somaDias } from './calc.js';
+import { dinheiro } from './moeda.js';
 
 const MARSALA = '#6E2A3C';
-const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const VALIDADE_DIAS = 7;
 
 const somaItens = (o) => (o.itens || []).reduce((t, i) => t + i.valor, 0);
@@ -17,8 +17,8 @@ export function textoOrcamento(o, atelie) {
     `Orçamento para ${o.cliente}`,
     '',
     ...(o.itens
-      ? [...o.itens.map((i) => `${nomeItem(i)}: ${fmt.format(i.valor)}`), ...(desc ? [`Desconto: −${fmt.format(desc)}`] : []), `*Total: ${fmt.format(o.valor)}*`]
-      : [`${o.descricao}: *${fmt.format(o.valor)}*`]),
+      ? [...o.itens.map((i) => `${nomeItem(i)}: ${dinheiro(i.valor)}`), ...(desc ? [`Desconto: −${dinheiro(desc)}`] : []), `*Total: ${dinheiro(o.valor)}*`]
+      : [`${o.descricao}: *${dinheiro(o.valor)}*`]),
     `Pronto até ${dataBR(o.prazo)}`,
     o.obs ? `Observação: ${o.obs}` : null,
     '',
@@ -32,7 +32,7 @@ export function textoTabela(itens, atelie) {
   return [
     `*Tabela de preços${atelie.nome ? ` — ${atelie.nome}` : ''}*`,
     '',
-    ...itens.map(([nome, v]) => `${nome}: ${fmt.format(v)}`),
+    ...itens.map(([nome, v]) => `${nome}: ${dinheiro(v)}`),
     '',
     atelie.telefone ? `WhatsApp ${atelie.telefone}` : null,
     atelie.endereco || null,
@@ -73,7 +73,7 @@ export async function imagemOrcamento(o, atelie) {
   if (o.itens) {
     // Cada serviço numa linha: nome à esquerda, valor à direita.
     const desc = descontoDe(o);
-    const lista = [...o.itens.map((i) => [nomeItem(i), fmt.format(i.valor)]), ...(desc ? [['Desconto', `−${fmt.format(desc)}`]] : [])];
+    const lista = [...o.itens.map((i) => [nomeItem(i), dinheiro(i.valor)]), ...(desc ? [['Desconto', `−${dinheiro(desc)}`]] : [])];
     lista.forEach(([nome, valor], k) => {
       ctx.font = `600 42px ${sans}`;
       const larguraValor = ctx.measureText(valor).width;
@@ -86,7 +86,7 @@ export async function imagemOrcamento(o, atelie) {
     add(o.descricao, `600 60px ${serif}`, '#2B2522', 24);
   }
   const iValor = blocos.length;
-  add(fmt.format(o.valor), `600 120px ${serif}`, MARSALA, o.itens ? 6 : 30);
+  add(dinheiro(o.valor), `600 120px ${serif}`, MARSALA, o.itens ? 6 : 30);
   add(`Pronto até ${dataBR(o.prazo)}`, `600 44px ${sans}`, '#2B2522', 70);
   if (o.obs) add(o.obs, `400 40px ${sans}`, '#2B2522', 30);
   add(`Orçamento válido até ${dataBR(somaDias(o.criadoEm, VALIDADE_DIAS))}`, `400 34px ${sans}`, '#6B6B6B', 60);
